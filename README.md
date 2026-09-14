@@ -74,9 +74,10 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 
 ## 控制台说明
 
-「opencode 控制台」分三个标签页：
+「opencode 控制台」为侧边栏布局，分四个区块：
 
-- **日志**：服务状态（端口 / PID / 用户名 / 工作目录 / Node.js）、启停与重启、`var/opencode.log` 内容与清空。
+- **概览**：服务状态、会话命令条、启动/停止/重启、打开 Web UI，以及端口 / PID / 用户名 / 工作目录 / Node.js 一览。
+- **日志**：`var/opencode.log` 最后 300 行，可刷新与清空。
 - **设置**：修改登录用户名、访问密码、工作目录与日志级别。用户名与密码对应 opencode 的 HTTP Basic 认证（`OPENCODE_SERVER_USERNAME` / `OPENCODE_SERVER_PASSWORD`）；保存后服务会**自动重启**使配置生效。
 - **升级与备份**：从 GitHub Releases 拉取与当前架构匹配的最新二进制（原子替换后自动重启，x86 无 AVX2 时自动选 `x64-baseline`）；以及打包数据目录为 `.tar.gz` 下载。
 
