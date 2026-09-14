@@ -127,3 +127,18 @@ jobs:
           files: dist/*.fpk
           draft: false
           prerelease: false
+
+      - name: Commit manifest bump
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest
+          if git diff --staged --quiet; then
+            echo "manifest unchanged"
+          else
+            git commit -m "chore: manifest -> opencode v${VERSION} [skip ci]"
+            git push
+          fi
