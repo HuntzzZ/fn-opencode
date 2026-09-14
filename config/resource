@@ -1,0 +1,18 @@
+{
+    "data-share":
+    {
+        "shares":
+        [
+            {
+                "name": "com.opencode.web",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "com.opencode.web"
+                    ]
+                }
+            }
+        ]
+    }
+}

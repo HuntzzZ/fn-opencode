@@ -1,0 +1,10 @@
+#!/bin/bash
+# 升级前执行
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+. "${SCRIPT_DIR}/common"
+
+trap 'handle_error' ERR
+upgrade_init
+exit 0

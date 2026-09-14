@@ -1,0 +1,24 @@
+[
+    {
+        "stepTitle": "卸载 opencode",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "卸载会停止 opencode 服务。请选择是否同时删除数据目录（包含配置、会话记录与登录凭据）。"
+            },
+            {
+                "type": "select",
+                "field": "wizard_keep_data",
+                "label": "数据处理",
+                "initValue": "true",
+                "options": [
+                    { "label": "保留数据（推荐，便于日后重装恢复）", "value": "true" },
+                    { "label": "删除数据（彻底清理，不可恢复）", "value": "false" }
+                ],
+                "rules": [
+                    { "required": true, "message": "请选择数据处理方式" }
+                ]
+            }
+        ]
+    }
+]

@@ -1,0 +1,218 @@
+#!/bin/bash
+# 公共函数库：所有 cmd 脚本共用。逻辑集中在这里，其它脚本只做转发。
+
+APP_ID="com.opencode.web"
+
+# ── 路径 ────────────────────────────────────────────────
+# TRIM_APPDEST: 程序目录  /var/apps/<app>/target
+# TRIM_PKGVAR : 运行数据  /var/apps/<app>/var
+# TRIM_PKGETC : 持久配置  /var/apps/<app>/etc
+# TRIM_PKGHOME: 家目录    /var/apps/<app>/home
+# TRIM_DATA_SHARE_PATHS: 用户授权共享目录（冒号分隔，取第一个）
+APP_DIR="${TRIM_APPDEST}"
+BIN="${APP_DIR}/opencode"
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+ENV_FILE="${TRIM_PKGETC}/opencode.env"
+PID_FILE="${TRIM_PKGVAR}/opencode.pid"
+LOG_FILE="${TRIM_PKGVAR}/opencode.log"
+PORT="${TRIM_SERVICE_PORT:-14096}"
+
+# ── 运行环境 ────────────────────────────────────────────
+export HOME="${DATA_DIR}"
+export XDG_CONFIG_HOME="${DATA_DIR}/.config"
+export XDG_DATA_HOME="${DATA_DIR}/.local/share"
+export BROWSER="true"          # 无桌面环境，禁止 opencode 尝试拉起浏览器
+
+log_msg() {
+    mkdir -p "$(dirname "${LOG_FILE}")"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
+}
+
+err_msg() {
+    local msg="$1"
+    if [ -n "${TRIM_TEMP_LOGFILE}" ]; then
+        echo "opencode: ${msg}" >> "${TRIM_TEMP_LOGFILE}"
+    fi
+    log_msg "ERROR: ${msg}"
+    return 1
+}
+
+# 供 install/upgrade 脚本 trap ERR 使用：把失败原因回传给应用中心
+handle_error() {
+    local code=$?
+    [ "${code}" -eq 0 ] && code=1
+    if [ -n "${TRIM_TEMP_LOGFILE}" ]; then
+        echo "opencode 安装/升级失败 (Exit Code: ${code})，详见 ${LOG_FILE}" >> "${TRIM_TEMP_LOGFILE}"
+    fi
+    exit 1
+}
+
+check_process() {
+    local pid="$1"
+    [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
+}
+
+load_env() {
+    if [ -f "${ENV_FILE}" ]; then
+        # shellcheck disable=SC1090
+        . "${ENV_FILE}"
+    fi
+    export OPENCODE_SERVER_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
+    export OPENCODE_LOG_LEVEL="${OPENCODE_LOG_LEVEL:-info}"
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if check_process "${pid}"; then
+            return 0
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 1
+}
+
+start_process() {
+    if status; then
+        log_msg "opencode 已在运行 (PID=$(cat "${PID_FILE}"))"
+        return 0
+    fi
+    if [ ! -x "${BIN}" ]; then
+        err_msg "找不到可执行文件：${BIN}"
+        return 1
+    fi
+
+    load_env
+    mkdir -p "${HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
+    log_msg "启动 opencode web，端口 ${PORT}"
+
+    cd "${DATA_DIR}" || cd /tmp
+    nohup "${BIN}" web --hostname 0.0.0.0 --port "${PORT}" >> "${LOG_FILE}" 2>&1 &
+    echo "$!" > "${PID_FILE}"
+
+    local n=0
+    while [ "${n}" -lt 15 ] && ! status; do
+        sleep 1
+        n=$((n + 1))
+    done
+
+    if status; then
+        log_msg "启动成功 (PID=$(cat "${PID_FILE}"))"
+        return 0
+    fi
+    rm -f "${PID_FILE}"
+    err_msg "启动失败，请查看日志：${LOG_FILE}"
+    return 1
+}
+
+stop_process() {
+    log_msg "停止 opencode ..."
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if check_process "${pid}"; then
+            kill -TERM "${pid}" 2>/dev/null
+            local n=0
+            while check_process "${pid}" && [ "${n}" -lt 20 ]; do
+                sleep 0.5
+                n=$((n + 1))
+            done
+            if check_process "${pid}"; then
+                kill -KILL "${pid}" 2>/dev/null
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    pkill -f "${BIN} web" 2>/dev/null
+    return 0
+}
+
+fix_perms() {
+    mkdir -p "${DATA_DIR}" "${TRIM_PKGVAR}" "${TRIM_PKGETC}"
+    chown -R "${TRIM_USERNAME}:${TRIM_GROUPNAME}" "${DATA_DIR}" 2>/dev/null
+    chown -R "${TRIM_USERNAME}:${TRIM_GROUPNAME}" "${TRIM_PKGVAR}" 2>/dev/null
+    chown -R "${TRIM_USERNAME}:${TRIM_GROUPNAME}" "${TRIM_PKGETC}" 2>/dev/null
+    chmod -R 755 "${DATA_DIR}" 2>/dev/null
+    chmod 755 "${BIN}" 2>/dev/null
+}
+
+# ── 生命周期 ────────────────────────────────────────────
+install_init() {
+    log_msg "安装前检查 ..."
+    if [ ! -f "${BIN}" ]; then
+        err_msg "安装包内缺少 opencode 二进制"
+        return 1
+    fi
+    return 0
+}
+
+install_callback() {
+    local pass="${wizard_server_password:-}"
+    local level="${wizard_log_level:-info}"
+
+    if [ -z "${pass}" ]; then
+        err_msg "Web 访问密码不能为空"
+        return 1
+    fi
+    if [ -n "${wizard_server_password_confirm:-}" ] && [ "${pass}" != "${wizard_server_password_confirm}" ]; then
+        err_msg "两次输入的密码不一致"
+        return 1
+    fi
+
+    log_msg "写入运行时配置 ..."
+    umask 022
+    {
+        echo "# opencode 运行时配置（由飞牛安装向导生成，请勿手工修改结构）"
+        printf 'OPENCODE_SERVER_PASSWORD=%s\n' "${pass}"
+        printf 'OPENCODE_LOG_LEVEL=%s\n' "${level}"
+    } > "${ENV_FILE}"
+    chmod 600 "${ENV_FILE}" 2>/dev/null
+
+    fix_perms
+    log_msg "安装初始化完成"
+    return 0
+}
+
+upgrade_init() {
+    log_msg "升级前停止服务 ..."
+    stop_process
+    return 0
+}
+
+upgrade_callback() {
+    fix_perms
+    log_msg "升级完成，配置与数据已保留"
+    return 0
+}
+
+uninstall_init() {
+    log_msg "卸载前停止服务 ..."
+    stop_process
+    return 0
+}
+
+uninstall_callback() {
+    stop_process
+    rm -f "${PID_FILE}"
+    if [ "${wizard_keep_data:-true}" != "true" ]; then
+        log_msg "按用户选择删除数据目录：${DATA_DIR}"
+        rm -rf "${DATA_DIR}" 2>/dev/null
+    else
+        log_msg "保留数据目录：${DATA_DIR}"
+    fi
+    rm -rf "${TRIM_PKGVAR}" 2>/dev/null
+    log_msg "卸载清理完成"
+    return 0
+}
+
+config_init() {
+    return 0
+}
+
+config_callback() {
+    log_msg "配置变更，重启服务以生效 ..."
+    stop_process
+    start_process
+    return 0
+}

@@ -1,0 +1,129 @@
+name: Build fnOS package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "opencode 版本（留空表示最新 release）"
+        required: false
+        type: string
+      force:
+        description: "强制重新构建（即使版本与 manifest 相同）"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 每天 20:00 UTC（北京时间 04:00）检查上游更新
+    - cron: "0 20 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-fpk
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      need_build: ${{ steps.check.outputs.need_build }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve upstream version
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_VERSION}" ]; then
+            latest="${INPUT_VERSION#v}"
+          else
+            latest="$(curl -fsSL -H "Authorization: token ${GH_TOKEN}" \
+              https://api.github.com/repos/anomalyco/opencode/releases/latest \
+              | jq -r '.tag_name' | sed 's/^v//')"
+          fi
+          current="$(awk -F= '/^version/{gsub(/[[:space:]]/,"",$2);print $2}' manifest)"
+          echo "manifest=${current} upstream=${latest} force=${INPUT_FORCE}"
+          if [ "${INPUT_FORCE}" = "true" ] || [ "${latest}" != "${current}" ]; then
+            echo "need_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "need_build=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=${latest}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    if: needs.check.outputs.need_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch opencode binary
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/anomalyco/opencode/releases/download/v${VERSION}/opencode-linux-x64-baseline.tar.gz"
+          echo "Downloading ${url}"
+          curl -fL --retry 3 -o /tmp/opencode.tar.gz "$url"
+          tar -xzf /tmp/opencode.tar.gz -C /tmp
+          mkdir -p app
+          install -m 755 /tmp/opencode app/opencode
+          ./app/opencode --version || true
+
+      - name: Install fnpack
+        run: |
+          set -euo pipefail
+          sudo curl -fL -o /usr/local/bin/fnpack \
+            https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64
+          sudo chmod +x /usr/local/bin/fnpack
+          fnpack --help | head -n 1
+
+      - name: Bump manifest
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s|^version[[:space:]]*=.*|version                    = ${VERSION}|" manifest
+          sed -i -E "s|^changelog[[:space:]]*=.*|changelog                  = \"打包 opencode v${VERSION}\"|" manifest
+          grep -E "^(version|changelog)" manifest
+
+      - name: Build fpk
+        run: |
+          set -euo pipefail
+          fnpack build
+          ls -la ./*.fpk
+
+      - name: Rename package
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mv com.opencode.web.fpk "dist/com.opencode.web_v${VERSION}.fpk"
+          ls -la dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: com.opencode.web_v${{ needs.check.outputs.version }}
+          path: dist/*.fpk
+          retention-days: 30
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: v${{ needs.check.outputs.version }}
+          body: |
+            打包 opencode v${{ needs.check.outputs.version }}
+
+            安装：飞牛应用中心 → 设置 → 手动安装应用 → 选择下面的 `.fpk`。
+          files: dist/*.fpk
+          draft: false
+          prerelease: false

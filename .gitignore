@@ -1,0 +1,4 @@
+*.fpk
+dist/
+tools/
+app/opencode

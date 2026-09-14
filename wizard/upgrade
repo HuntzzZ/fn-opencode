@@ -1,0 +1,15 @@
+[
+    {
+        "stepTitle": "升级 opencode",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "即将升级本应用。升级过程会保留你的数据目录与访问密码。"
+            },
+            {
+                "type": "tips",
+                "helpText": "建议升级前先到控制台下载一份数据备份。"
+            }
+        ]
+    }
+]

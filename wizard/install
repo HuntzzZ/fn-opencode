@@ -1,0 +1,70 @@
+[
+    {
+        "stepTitle": "欢迎使用 opencode",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "opencode 是开源 AI 编程代理。本应用会把它以 Web 服务方式运行，你可以在浏览器里直接读写代码、执行命令。"
+            },
+            {
+                "type": "tips",
+                "helpText": "安装完成后，点击飞牛桌面「opencode」图标开始使用；「opencode 控制台」用于启停服务、查看日志和在线升级。"
+            },
+            {
+                "type": "tips",
+                "helpText": "可选依赖：如需在 opencode 中运行 Node.js 相关工具或 MCP Server，请先在应用中心安装 Node.js 应用。"
+            }
+        ]
+    },
+    {
+        "stepTitle": "访问密码",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "opencode 会执行文件读写和命令，务必设置访问密码；登录用户名固定为 <b>opencode</b>。"
+            },
+            {
+                "type": "password",
+                "field": "wizard_server_password",
+                "label": "设置访问密码",
+                "initValue": "opencode",
+                "rules": [
+                    { "required": true, "message": "请输入访问密码" },
+                    { "min": 6, "message": "密码长度不能少于 6 位" }
+                ]
+            },
+            {
+                "type": "password",
+                "field": "wizard_server_password_confirm",
+                "label": "确认密码",
+                "rules": [
+                    { "required": true, "message": "请再次输入密码" }
+                ]
+            }
+        ]
+    },
+    {
+        "stepTitle": "日志级别",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "控制写入服务日志的详细程度。排查问题时可选 debug。"
+            },
+            {
+                "type": "select",
+                "field": "wizard_log_level",
+                "label": "日志级别",
+                "initValue": "info",
+                "options": [
+                    { "label": "Info - 常规信息（推荐）", "value": "info" },
+                    { "label": "Debug - 调试信息", "value": "debug" },
+                    { "label": "Warn - 警告", "value": "warn" },
+                    { "label": "Error - 错误", "value": "error" }
+                ],
+                "rules": [
+                    { "required": true, "message": "请选择日志级别" }
+                ]
+            }
+        ]
+    }
+]
