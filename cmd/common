@@ -139,17 +139,25 @@ fix_perms() {
 
 # ── 生命周期 ────────────────────────────────────────────
 install_init() {
+    # 注意：install_init 在“安装应用文件之前”执行，此时 TRIM_APPDEST 下还没有内容，
+    # 因此这里不能检查二进制，只做与 payload 无关的检查。
     log_msg "安装前检查 ..."
-    if [ ! -f "${BIN}" ]; then
-        err_msg "安装包内缺少 opencode 二进制"
-        return 1
-    fi
     return 0
 }
 
 install_callback() {
     local pass="${wizard_server_password:-}"
     local level="${wizard_log_level:-info}"
+
+    # 安装完成后才校验二进制是否就位
+    if [ ! -f "${BIN}" ]; then
+        log_msg "二进制缺失，APP_DIR=${APP_DIR} 实际内容："
+        ls -la "${APP_DIR}" >> "${LOG_FILE}" 2>&1
+        find "${APP_DIR}" -maxdepth 2 >> "${LOG_FILE}" 2>&1
+        err_msg "找不到 opencode 二进制：${BIN}（详见 ${LOG_FILE}）"
+        return 1
+    fi
+    chmod 755 "${BIN}" 2>/dev/null
 
     if [ -z "${pass}" ]; then
         err_msg "Web 访问密码不能为空"
