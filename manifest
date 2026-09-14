@@ -1,5 +1,5 @@
 appname                    = com.opencode.web
-version                    = 1.0.0
+version                    = 1.18.30
 display_name               = opencode
 desc                       = `<p>opencode 是面向终端的开源 AI 编程代理（anomalyco/opencode），本应用将它的 Web 界面一键部署到飞牛 NAS。</p><h3>主要能力</h3><p>在浏览器中用自然语言读写代码、执行命令、运行测试；内置 build / plan 两种 Agent；兼容 75+ 模型提供方，也可接本地模型；会话与凭据全部保存在本机。</p><p>安装后点击桌面「opencode」图标直接使用；「opencode 控制台」可启停服务、查看日志、重置密码、备份会话数据与在线升级。</p>`
 platform                   = x86
@@ -14,4 +14,4 @@ desktop_applaunchname      = com.opencode.web.Application
 service_port               = 14096
 checkport                  = false
 disable_authorization_path = false
-changelog                  = "首个版本：opencode Web 一键部署，附带控制台（启停 / 日志 / 重置密码 / 备份 / 在线升级）"
+changelog                  = "打包 opencode v1.18.30"
