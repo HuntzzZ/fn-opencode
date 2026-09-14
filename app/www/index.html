@@ -358,7 +358,10 @@
                         </div>
 
                         <div class="sep"></div>
-                        <div><button class="btn primary" id="btnSave">保存设置</button></div>
+                        <div class="actions">
+                            <button class="btn primary" id="btnSave">保存设置</button>
+                            <a class="btn" id="btnDiag" target="_blank" rel="noopener">环境诊断</a>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -494,6 +497,7 @@
             setTimeout(() => clearInterval(t), 120000);
         };
         $('btnBackup').onclick = () => { location.href = `${API}?action=backup_download`; };
+        $('btnDiag').href = `${API}?action=diag`;
         $('btnSave').onclick = async () => {
             const d = await post('save_config', {
                 username: $('cfgUser').value.trim(),

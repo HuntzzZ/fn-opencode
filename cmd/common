@@ -16,6 +16,7 @@ ENV_FILE="${TRIM_PKGETC}/opencode.env"
 PID_FILE="${TRIM_PKGVAR}/opencode.pid"
 LOG_FILE="${TRIM_PKGVAR}/opencode.log"
 SHARES_FILE="${TRIM_PKGVAR}/shares.list"
+ENV_DUMP_FILE="${TRIM_PKGVAR}/env.dump"
 PORT="${TRIM_SERVICE_PORT:-14096}"
 
 # ── 运行环境 ────────────────────────────────────────────
@@ -95,6 +96,25 @@ dump_shares() {
     IFS="${old_ifs}"
 }
 
+# 记录环境变量，供控制台诊断页面查看（不同飞牛版本路径变量可能不同）
+dump_env() {
+    {
+        echo "TRIM_APPDEST=${TRIM_APPDEST}"
+        echo "TRIM_PKGVAR=${TRIM_PKGVAR}"
+        echo "TRIM_PKGETC=${TRIM_PKGETC}"
+        echo "TRIM_PKGHOME=${TRIM_PKGHOME}"
+        echo "TRIM_DATA_SHARE_PATHS=${TRIM_DATA_SHARE_PATHS}"
+        echo "TRIM_SERVICE_PORT=${TRIM_SERVICE_PORT}"
+        echo "TRIM_USERNAME=${TRIM_USERNAME}"
+        echo "TRIM_GROUPNAME=${TRIM_GROUPNAME}"
+        echo "APP_DIR=${APP_DIR}"
+        echo "DATA_DIR=${DATA_DIR}"
+        echo "ENV_FILE=${ENV_FILE}"
+        echo "CWD=$(pwd)"
+        echo "AT=$(date '+%Y-%m-%d %H:%M:%S')"
+    } > "${ENV_DUMP_FILE}" 2>/dev/null
+}
+
 status() {
     if [ -f "${PID_FILE}" ]; then
         local pid
@@ -119,6 +139,7 @@ start_process() {
 
     load_env
     dump_shares
+    dump_env
     mkdir -p "${HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
 
     local wd dirflag

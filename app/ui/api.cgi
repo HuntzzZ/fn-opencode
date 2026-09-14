@@ -43,6 +43,23 @@ require_post() {
     return 0
 }
 
+# 去掉 ANSI 转义与 JSON 非法控制字符（opencode 日志带颜色码）
+sanitize() {
+    sed -e 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g' -e 's/\r$//' | tr -d '\000-\010\013\014\016-\037'
+}
+
+# 把标准输入转成 JSON 字符串数组
+json_lines() {
+    printf '['
+    sanitize | while IFS= read -r line; do
+        line="${line//\\/\\\\}"
+        line="${line//\"/\\\"}"
+        line="${line//$'\t'/    }"
+        printf '"%s",' "${line}"
+    done | sed 's/,$//'
+    printf ']'
+}
+
 load_env() {
     if [ -f "${ENV_FILE}" ]; then
         # shellcheck disable=SC1090
@@ -199,15 +216,32 @@ do_logs() {
         echo '{"success":true,"logs":[]}'
         return
     fi
-    printf '{"success":true,"logs":['
-    tail -n 300 "${LOG_FILE}" | while IFS= read -r line; do
-        line="${line//\\/\\\\}"
-        line="${line//\"/\\\"}"
-        line="${line//$'\r'/}"
-        line="${line//$'\t'/    }"
-        printf '"%s",' "$line"
-    done | sed 's/,$//'
-    printf ']}\n'
+    printf '{"success":true,"logs":'
+    tail -n 300 "${LOG_FILE}" | json_lines
+    printf '}\n'
+}
+
+# 诊断：把实际解析到的路径与关键文件内容回给前端，便于定位环境差异
+do_diag() {
+    local var_dir="${APP_ROOT}/var"
+    json_header
+    printf '{'
+    printf '"appRoot":"%s",' "${APP_ROOT}"
+    printf '"bin":"%s","binExists":%s,' "${BIN}" "$([ -x "${BIN}" ] && echo true || echo false)"
+    printf '"logFile":"%s","logExists":%s,' "${LOG_FILE}" "$([ -f "${LOG_FILE}" ] && echo true || echo false)"
+    printf '"pidFile":"%s","pidExists":%s,' "${PID_FILE}" "$([ -f "${PID_FILE}" ] && echo true || echo false)"
+    printf '"envFile":"%s","envExists":%s,' "${ENV_FILE}" "$([ -f "${ENV_FILE}" ] && echo true || echo false)"
+    printf '"varIsSymlink":%s,' "$([ -L "${var_dir}" ] && echo true || echo false)"
+    printf '"varTarget":"%s",' "$(readlink -f "${var_dir}" 2>/dev/null)"
+    printf '"varListing":'
+    ls -la "${var_dir}" 2>&1 | json_lines
+    printf ',"sharesList":'
+    if [ -f "${var_dir}/shares.list" ]; then cat "${var_dir}/shares.list" | json_lines; else printf '[]'; fi
+    printf ',"envDump":'
+    if [ -f "${var_dir}/env.dump" ]; then cat "${var_dir}/env.dump" | json_lines; else printf '[]'; fi
+    printf ',"envFileContent":'
+    if [ -f "${ENV_FILE}" ]; then cat "${ENV_FILE}" | json_lines; else printf '[]'; fi
+    printf '}\n'
 }
 
 do_clear_logs() {
@@ -224,7 +258,10 @@ do_get_config() {
     if [ -f "${shares_file}" ]; then
         shares="$(tr '\n' ':' < "${shares_file}" | sed 's/:$//')"
     fi
-    [ -n "${shares}" ] || shares="${DATA_DIR}"
+    case ":${shares}:" in
+    *":${DATA_DIR}:"*) ;;
+    *) shares="${shares:+${shares}:}${DATA_DIR}" ;;
+    esac
     local auth_enabled=false
     if [ -n "${OPENCODE_SERVER_PASSWORD}" ]; then
         auth_enabled=true
@@ -383,14 +420,9 @@ do_upgrade_logs() {
         echo '{"success":true,"logs":[]}'
         return
     fi
-    printf '{"success":true,"logs":['
-    tail -n 300 "${UPGRADE_LOG_FILE}" | while IFS= read -r line; do
-        line="${line//\\/\\\\}"
-        line="${line//\"/\\\"}"
-        line="${line//$'\r'/}"
-        printf '"%s",' "$line"
-    done | sed 's/,$//'
-    printf ']}\n'
+    printf '{"success":true,"logs":'
+    tail -n 300 "${UPGRADE_LOG_FILE}" | json_lines
+    printf '}\n'
 }
 
 do_backup() {
@@ -428,6 +460,7 @@ for src in "${QUERY_STRING}" "${REQUEST_URI}"; do
     *action=get_config*) action="get_config" ;;
     *action=save_config*) action="save_config" ;;
     *action=check_deps*) action="check_deps" ;;
+    *action=diag*) action="diag" ;;
     *action=backup_download*) action="backup" ;;
     *action=upgrade_status*) action="upgrade_status" ;;
     *action=upgrade_logs*) action="upgrade_logs" ;;
@@ -446,6 +479,7 @@ clear_logs) require_post && do_clear_logs ;;
     save_config) require_post && do_save_config ;;
     backup) do_backup ;;
     check_deps) do_check_deps ;;
+    diag) do_diag ;;
 upgrade) require_post && do_upgrade ;;
 upgrade_status) do_upgrade_status ;;
 upgrade_logs) do_upgrade_logs ;;
