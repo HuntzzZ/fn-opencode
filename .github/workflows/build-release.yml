@@ -15,6 +15,17 @@ on:
   schedule:
     # 每天 20:00 UTC（北京时间 04:00）检查上游更新
     - cron: "0 20 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "cmd/**"
+      - "app/**"
+      - "wizard/**"
+      - "config/**"
+      - "scripts/**"
+      - "manifest"
+      - ".github/workflows/**"
 
 permissions:
   contents: write
@@ -38,6 +49,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_FORCE: ${{ inputs.force }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           if [ -n "${INPUT_VERSION}" ]; then
@@ -48,12 +60,17 @@ jobs:
               | jq -r '.tag_name' | sed 's/^v//')"
           fi
           current="$(awk -F= '/^version/{gsub(/[[:space:]]/,"",$2);print $2}' manifest)"
-          echo "manifest=${current} upstream=${latest} force=${INPUT_FORCE}"
+          echo "manifest=${current} upstream=${latest} event=${EVENT_NAME} force=${INPUT_FORCE}"
+
+          need="false"
           if [ "${INPUT_FORCE}" = "true" ] || [ "${latest}" != "${current}" ]; then
-            echo "need_build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "need_build=false" >> "$GITHUB_OUTPUT"
+            need="true"
           fi
+          # 打包相关文件有改动而推送到 main 时，也重新构建（版本号不变则覆盖同名 Release）
+          if [ "${EVENT_NAME}" = "push" ]; then
+            need="true"
+          fi
+          echo "need_build=${need}" >> "$GITHUB_OUTPUT"
           echo "version=${latest}" >> "$GITHUB_OUTPUT"
 
   build:

@@ -125,6 +125,7 @@ install_dep_apps = nodejs_v24
 `.github/workflows/build-release.yml` 会自动跟踪 opencode 上游并出包：
 
 - **自动**：每天 04:00（北京时间）拉取 opencode 最新 release，若与 `manifest.version` 不同则构建；
+- **推送**：向 `main` 推送 `cmd/` `app/` `wizard/` `config/` `scripts/` `manifest` 的改动时重新构建（版本号不变则覆盖同名 Release）；
 - **手动**：Actions → *Build fnOS package* → *Run workflow*，可填 `version`（指定版本）与 `force`（强制重建）；
 - 构建流程：下载 `opencode-linux-x64-baseline` 二进制 → 下载 `fnpack 1.2.3` → 改 `manifest` 版本/changelog → `fnpack build` → 建 Release `v<版本>` 并附带 `.fpk`。
 
