@@ -52,7 +52,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 ## 安装到飞牛
 
 1. 应用中心 → 设置 → 手动安装应用 → 选择 `dist/*.fpk`
-2. 安装向导中设置 Web 访问密码（用户名固定 `opencode`）和日志级别
+2. 安装向导中设置登录用户名、访问密码、工作目录（可留空）与日志级别
 3. 安装完成后点击桌面「opencode」图标即可使用
 
 ## 运行机制
@@ -74,11 +74,13 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 
 ## 控制台说明
 
-- **状态 / 启停 / 重启**：查看服务是否运行，手动控制进程。
-- **程序日志**：读取 `var/opencode.log` 末尾内容。
-- **在线升级**：从 GitHub Releases 下载与当前架构匹配的最新二进制，原子替换后自动重启。x86 无 AVX2 时自动选 `x64-baseline`。
-- **重置密码**：写回 `etc/opencode.env`，随后需手动启动服务。
-- **备份**：打包整个数据目录为 `.tar.gz` 下载。
+「opencode 控制台」分三个标签页：
+
+- **日志**：服务状态（端口 / PID / 用户名 / 工作目录 / Node.js）、启停与重启、`var/opencode.log` 内容与清空。
+- **设置**：修改登录用户名、访问密码、工作目录与日志级别。用户名与密码对应 opencode 的 HTTP Basic 认证（`OPENCODE_SERVER_USERNAME` / `OPENCODE_SERVER_PASSWORD`）；保存后服务会停止，需重新启动。
+- **升级与备份**：从 GitHub Releases 拉取与当前架构匹配的最新二进制（原子替换后自动重启，x86 无 AVX2 时自动选 `x64-baseline`）；以及打包数据目录为 `.tar.gz` 下载。
+
+工作目录通过 `opencode web --dir <路径>` 指定（旧版本为 `--cwd`，脚本会自动探测）。留空则使用应用数据目录；指向 NAS 其他目录前，请先在飞牛应用设置里把该目录授权给本应用。
 
 ## 注意事项
 
@@ -145,6 +147,7 @@ git push -u origin main
 - 本仓库仅为 **非官方第三方打包**，与 opencode 官方（anomalyco）无隶属关系；
 - opencode 本体版权归其上游所有，遵循其自身许可，本仓库不改动其代码，仅在安装时下载/分发其二进制；
 - 本仓库的打包脚本与配置采用 MIT 许可（见 `LICENSE`）；
+- 应用图标取自 opencode 官方资源，版权归上游所有，仅用于标识该应用；
 - 使用前请自行评估安全与合规风险。
 
 ## 许可

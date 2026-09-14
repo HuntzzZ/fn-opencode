@@ -1,4 +1,4 @@
-# Generate placeholder application icons.
+# Generate fnOS application icons from the official opencode logo.
 # Requires Windows PowerShell 5.1 (System.Drawing).
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/make-icons.ps1
 
@@ -9,61 +9,43 @@ $root = Split-Path -Parent $PSScriptRoot
 $uiImages = Join-Path $root "app\ui\images"
 New-Item -ItemType Directory -Force -Path $uiImages | Out-Null
 
-function New-RoundedPath([int]$x, [int]$y, [int]$w, [int]$h, [int]$r) {
-    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $d = $r * 2
-    $p.AddArc($x, $y, $d, $d, 180, 90)
-    $p.AddArc($x + $w - $d, $y, $d, $d, 270, 90)
-    $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d, 0, 90)
-    $p.AddArc($x, $y + $h - $d, $d, $d, 90, 90)
-    $p.CloseFigure()
-    return $p
+# Source logo: prefer the copy committed under scripts/assets, else download.
+$src = Join-Path $PSScriptRoot "assets\opencode-icon.png"
+if (-not (Test-Path $src)) {
+    $ProgressPreference = "SilentlyContinue"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $src) | Out-Null
+    $url = "https://opencode.ai/web-app-manifest-512x512.png"
+    Write-Host "Downloading official logo from $url ..."
+    Invoke-WebRequest -Uri $url -OutFile $src -UseBasicParsing
 }
 
-function New-Icon([string]$path, [int]$size, [string]$text, [string]$c1, [string]$c2) {
-    $bmp = New-Object System.Drawing.Bitmap($size, $size)
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
-    $g.Clear([System.Drawing.Color]::Transparent)
-
-    $pad = [int]($size * 0.06)
-    $rect = New-Object System.Drawing.Rectangle($pad, $pad, ($size - 2 * $pad), ($size - 2 * $pad))
-    $radius = [int]($size * 0.22)
-    $gp = New-RoundedPath $rect.X $rect.Y $rect.Width $rect.Height $radius
-
-    $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-        $rect,
-        [System.Drawing.ColorTranslator]::FromHtml($c1),
-        [System.Drawing.ColorTranslator]::FromHtml($c2),
-        45.0)
-    $g.FillPath($brush, $gp)
-
-    $fontSize = [single]($size * 0.40)
-    $font = New-Object System.Drawing.Font("Segoe UI", $fontSize, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $fmt = New-Object System.Drawing.StringFormat
-    $fmt.Alignment = [System.Drawing.StringAlignment]::Center
-    $fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $g.DrawString($text, $font, $white, (New-Object System.Drawing.RectangleF(0, 0, $size, $size)), $fmt)
-
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $g.Dispose()
-    $bmp.Dispose()
-    $brush.Dispose()
-    $gp.Dispose()
-    $font.Dispose()
-    $white.Dispose()
+function New-Resized([string]$srcPath, [string]$dstPath, [int]$size) {
+    $img = [System.Drawing.Image]::FromFile($srcPath)
+    try {
+        $bmp = New-Object System.Drawing.Bitmap($size, $size)
+        try {
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try {
+                $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                $g.Clear([System.Drawing.Color]::Transparent)
+                $g.DrawImage($img, 0, 0, $size, $size)
+            }
+            finally { $g.Dispose() }
+            $bmp.Save($dstPath, [System.Drawing.Imaging.ImageFormat]::Png)
+        }
+        finally { $bmp.Dispose() }
+    }
+    finally { $img.Dispose() }
 }
 
-$sizes = @(64, 128, 256)
-
-foreach ($s in $sizes) {
-    New-Icon (Join-Path $uiImages "icon_$s.png") $s "oc" "#2F6DF6" "#7C3AED"
-    New-Icon (Join-Path $uiImages "console_$s.png") $s "</>" "#334155" "#0F172A"
+foreach ($s in @(64, 128, 256)) {
+    New-Resized $src (Join-Path $uiImages "icon_$s.png") $s
+    New-Resized $src (Join-Path $uiImages "console_$s.png") $s
 }
 
-New-Icon (Join-Path $root "ICON.PNG") 64 "oc" "#2F6DF6" "#7C3AED"
-New-Icon (Join-Path $root "ICON_256.PNG") 256 "oc" "#2F6DF6" "#7C3AED"
+New-Resized $src (Join-Path $root "ICON.PNG") 64
+New-Resized $src (Join-Path $root "ICON_256.PNG") 256
 
-Write-Host "Icons generated under $uiImages"
+Write-Host "Icons generated from official opencode logo -> $uiImages"

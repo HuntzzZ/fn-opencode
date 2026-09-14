@@ -1,8 +1,8 @@
 #!/bin/bash
 # api.cgi —— opencode 控制台后端 API
 # 用法: /cgi/ThirdParty/com.opencode.web/api.cgi?action=<name>
-#   status | start | stop | restart | logs | clear_logs | reset_auth
-#   backup_download | upgrade | upgrade_status | upgrade_logs
+#   status | start | stop | restart | logs | clear_logs | check_deps
+#   get_config | save_config | backup_download | upgrade | upgrade_status | upgrade_logs
 # 写操作要求 POST。
 
 APP_ID="com.opencode.web"
@@ -48,11 +48,64 @@ load_env() {
         # shellcheck disable=SC1090
         . "${ENV_FILE}"
     fi
+    export OPENCODE_SERVER_USERNAME="${OPENCODE_SERVER_USERNAME:-opencode}"
     export OPENCODE_SERVER_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
+    export OPENCODE_LOG_LEVEL="${OPENCODE_LOG_LEVEL:-info}"
+    OPENCODE_WORKDIR="${OPENCODE_WORKDIR:-}"
+}
+
+# 探测二进制支持的工作目录参数（新版 --dir，旧版 --cwd）
+web_dir_flag() {
+    local help
+    help="$("${BIN}" web --help 2>&1)"
+    if echo "${help}" | grep -q -- '--dir'; then
+        echo "--dir"
+    elif echo "${help}" | grep -q -- '--cwd'; then
+        echo "--cwd"
+    fi
+}
+
+resolve_workdir() {
+    local wd="${OPENCODE_WORKDIR:-}"
+    if [ -z "${wd}" ] || [ ! -d "${wd}" ]; then
+        wd="${DATA_DIR}"
+    fi
+    echo "${wd}"
 }
 
 backend_cmd() {
-    echo "export HOME='${DATA_DIR}'; export XDG_CONFIG_HOME='${DATA_DIR}/.config'; export XDG_DATA_HOME='${DATA_DIR}/.local/share'; export BROWSER=true; export OPENCODE_SERVER_PASSWORD='${OPENCODE_SERVER_PASSWORD}'; cd '${DATA_DIR}' && exec '${BIN}' web --hostname 0.0.0.0 --port ${PORT}"
+    local wd dirflag dirargs=""
+    wd="$(resolve_workdir)"
+    dirflag="$(web_dir_flag)"
+    if [ -n "${dirflag}" ]; then
+        dirargs="${dirflag} '${wd}'"
+    fi
+    printf "export HOME='%s'; export XDG_CONFIG_HOME='%s/.config'; export XDG_DATA_HOME='%s/.local/share'; export BROWSER=true; export OPENCODE_SERVER_USERNAME='%s'; export OPENCODE_SERVER_PASSWORD='%s'; export OPENCODE_LOG_LEVEL='%s'; cd '%s' && exec '%s' web --hostname 0.0.0.0 --port %s %s" \
+        "${DATA_DIR}" "${DATA_DIR}" "${DATA_DIR}" \
+        "${OPENCODE_SERVER_USERNAME}" "${OPENCODE_SERVER_PASSWORD}" "${OPENCODE_LOG_LEVEL}" \
+        "${wd}" "${BIN}" "${PORT}" "${dirargs}"
+}
+
+# 读取 ?key=value 形式的查询参数并做 URL 解码
+qp() {
+    local key="$1" src="$2" val
+    val="$(printf '%s' "${src}" | tr '&' '\n' | grep "^${key}=" | head -n 1 | cut -d= -f2-)"
+    val="${val//+/ }"
+    val="$(printf '%s' "${val}" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
+    printf '%b' "${val}"
+}
+
+write_env() {
+    local user="$1" pass="$2" level="$3" wdir="$4"
+    umask 022
+    {
+        echo "# opencode 运行时配置（由控制台生成）"
+        printf 'OPENCODE_SERVER_USERNAME=%s\n' "${user}"
+        printf 'OPENCODE_SERVER_PASSWORD=%s\n' "${pass}"
+        printf 'OPENCODE_LOG_LEVEL=%s\n' "${level}"
+        printf 'OPENCODE_WORKDIR=%s\n' "${wdir}"
+    } > "${ENV_FILE}"
+    chmod 600 "${ENV_FILE}" 2>/dev/null
 }
 
 do_start() {
@@ -159,26 +212,52 @@ do_clear_logs() {
     printf '{"success":true,"message":"日志已清空"}\n'
 }
 
-do_reset_auth() {
-    local newpass="${QUERY_STRING#*password=}"
-    newpass="${newpass%%&*}"
-    newpass="$(printf '%b' "${newpass//+/ }" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
-    if [ -z "${newpass}" ]; then
-        json_error "新密码不能为空"
+do_get_config() {
+    load_env
+    local shares=""
+    local shares_file="${APP_ROOT}/var/shares.list"
+    if [ -f "${shares_file}" ]; then
+        shares="$(tr '\n' ':' < "${shares_file}" | sed 's/:$//')"
+    fi
+    [ -n "${shares}" ] || shares="${DATA_DIR}"
+    local auth_enabled=false
+    if [ -n "${OPENCODE_SERVER_PASSWORD}" ]; then
+        auth_enabled=true
+    fi
+    json_header
+    printf '{"success":true,"username":"%s","passwordSet":%s,"logLevel":"%s","workdir":"%s","defaultWorkdir":"%s","shares":"%s","port":%s}\n' \
+        "${OPENCODE_SERVER_USERNAME}" "${auth_enabled}" "${OPENCODE_LOG_LEVEL}" \
+        "${OPENCODE_WORKDIR}" "${DATA_DIR}" "${shares}" "${PORT}"
+}
+
+do_save_config() {
+    load_env
+    local src="${QUERY_STRING}&${REQUEST_URI}"
+    local user pass level wdir
+    user="$(qp username "${src}")"
+    pass="$(qp password "${src}")"
+    level="$(qp log_level "${src}")"
+    wdir="$(qp workdir "${src}")"
+
+    [ -n "${user}" ] || user="${OPENCODE_SERVER_USERNAME:-opencode}"
+    [ -n "${level}" ] || level="${OPENCODE_LOG_LEVEL:-info}"
+    if [ -z "${pass}" ]; then
+        pass="${OPENCODE_SERVER_PASSWORD}"
+    fi
+
+    if [ -n "${wdir}" ] && [ ! -d "${wdir}" ]; then
+        json_error "工作目录不存在：${wdir}"
         return
     fi
-    if [ ! -f "${ENV_FILE}" ]; then
-        json_error "配置文件不存在"
+    if ! echo "${user}" | grep -qE '^[a-zA-Z0-9_.-]+$'; then
+        json_error "用户名只能包含字母、数字、下划线、点和连字符"
         return
     fi
-    local tmp="${ENV_FILE}.tmp"
-    grep -v '^OPENCODE_SERVER_PASSWORD=' "${ENV_FILE}" > "${tmp}"
-    printf 'OPENCODE_SERVER_PASSWORD=%s\n' "${newpass}" >> "${tmp}"
-    mv "${tmp}" "${ENV_FILE}"
-    chmod 600 "${ENV_FILE}" 2>/dev/null
+
+    write_env "${user}" "${pass}" "${level}" "${wdir}"
     do_stop > /dev/null
     json_header
-    printf '{"success":true,"message":"密码已更新，服务已停止，请手动启动"}\n'
+    printf '{"success":true,"message":"设置已保存，服务已停止，请点击启动"}\n'
 }
 
 do_restart() {
@@ -325,7 +404,8 @@ for src in "${QUERY_STRING}" "${REQUEST_URI}"; do
     *action=restart*) action="restart" ;;
     *action=logs*) action="logs" ;;
     *action=clear_logs*) action="clear_logs" ;;
-    *action=reset_auth*) action="reset_auth" ;;
+    *action=get_config*) action="get_config" ;;
+    *action=save_config*) action="save_config" ;;
     *action=check_deps*) action="check_deps" ;;
     *action=backup_download*) action="backup" ;;
     *action=upgrade_status*) action="upgrade_status" ;;
@@ -341,7 +421,8 @@ stop) require_post && do_stop ;;
 restart) require_post && do_restart ;;
 logs) do_logs ;;
 clear_logs) require_post && do_clear_logs ;;
-reset_auth) require_post && do_reset_auth ;;
+    get_config) do_get_config ;;
+    save_config) require_post && do_save_config ;;
     backup) do_backup ;;
     check_deps) do_check_deps ;;
 upgrade) require_post && do_upgrade ;;

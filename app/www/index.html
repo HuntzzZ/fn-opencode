@@ -7,292 +7,518 @@
     <title>opencode 控制台</title>
     <style>
         :root {
-            --bg: #f2f3f4;
+            --paper: #f6f5f3;
             --card: #ffffff;
-            --fg: #1c1f23;
-            --muted: #6b7280;
-            --line: #e5e7eb;
-            --brand: #2f6df6;
-            --ok: #16a34a;
-            --warn: #d97706;
-            --danger: #dc2626;
-            --log-bg: #0f172a;
-            --log-fg: #cbd5e1;
+            --ink: #131010;
+            --muted: #6f6a66;
+            --line: #e4e1dd;
+            --line-strong: #cfcac4;
+            --run: #2f8f4e;
+            --stop: #b4432f;
+            --shadow: 0 1px 2px rgba(19, 16, 16, .05), 0 8px 24px rgba(19, 16, 16, .04);
+            --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #16181d;
-                --card: #1e2128;
-                --fg: #e5e7eb;
-                --muted: #9aa3b2;
-                --line: #2b2f37;
-                --log-bg: #0b1020;
-                --log-fg: #b7c2d6;
-            }
+        html[data-theme="dark"] {
+            --paper: #131010;
+            --card: #1b1815;
+            --ink: #f4f2f0;
+            --muted: #9a938d;
+            --line: #2a2724;
+            --line-strong: #3a3632;
+            --run: #57c97a;
+            --stop: #e0735c;
+            --shadow: none;
         }
 
         * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            padding: 20px;
-            background: var(--bg);
-            color: var(--fg);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            padding: 28px 24px 48px;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--sans);
             font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
 
-        h1 { font-size: 18px; margin: 0 0 4px; }
-        .sub { color: var(--muted); margin-bottom: 18px; }
+        .wrap { max-width: 860px; margin: 0 auto; }
 
-        .card {
+        /* ── 顶部会话栏（签名元素）───────────────────────── */
+        .bar {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--line-strong);
+        }
+
+        .wordmark {
+            font-family: var(--mono);
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -.02em;
+        }
+
+        .wordmark .caret {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            margin-left: 6px;
+            background: var(--ink);
+            vertical-align: -2px;
+            opacity: .85;
+        }
+
+        .bar.running .wordmark .caret { animation: blink 1.1s steps(1, end) infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .tag {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-left: 10px;
+        }
+
+        .state { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; }
+
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+        .dot.on { background: var(--run); box-shadow: 0 0 0 3px color-mix(in srgb, var(--run) 18%, transparent); }
+        .dot.off { background: var(--stop); }
+
+        /* ── 命令条 ───────────────────────────────────── */
+        .cmdline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 16px 0 22px;
+            padding: 11px 14px;
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
+            border-radius: 10px;
+            font-family: var(--mono);
+            font-size: 12.5px;
+            color: var(--muted);
+            overflow-x: auto;
         }
 
-        .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .cmdline .prompt { color: var(--ink); user-select: none; }
+        .cmdline code { color: var(--ink); white-space: nowrap; }
+        .cmdline .meta { margin-left: auto; white-space: nowrap; }
 
-        .status { display: flex; gap: 20px; flex-wrap: wrap; }
-        .status .item { display: flex; flex-direction: column; gap: 4px; }
-        .status .k { color: var(--muted); font-size: 12px; }
-        .status .v { font-weight: 600; }
-
-        .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-        .dot.on { background: var(--ok); }
-        .dot.off { background: var(--danger); }
+        /* ── 按钮 ─────────────────────────────────────── */
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
 
         button, .btn {
             appearance: none;
-            border: 1px solid var(--line);
-            background: var(--card);
-            color: var(--fg);
-            border-radius: 8px;
-            padding: 8px 14px;
-            cursor: pointer;
+            font-family: var(--sans);
             font-size: 13px;
+            border: 1px solid var(--line-strong);
+            background: var(--card);
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 8px 15px;
+            cursor: pointer;
             text-decoration: none;
             display: inline-block;
+            transition: border-color .15s, transform .06s;
         }
 
-        button:hover, .btn:hover { border-color: var(--brand); color: var(--brand); }
-        button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
-        button.primary:hover { filter: brightness(1.08); color: #fff; }
-        button.danger:hover { border-color: var(--danger); color: var(--danger); }
-        button:disabled { opacity: .5; cursor: not-allowed; }
-
-        label { font-size: 13px; color: var(--muted); }
-        input[type="password"], input[type="text"] {
-            background: var(--card);
-            border: 1px solid var(--line);
-            color: var(--fg);
-            border-radius: 8px;
-            padding: 8px 10px;
-            min-width: 200px;
+        button:hover, .btn:hover { border-color: var(--ink); }
+        button:active, .btn:active { transform: translateY(1px); }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible {
+            outline: 2px solid var(--ink); outline-offset: 2px;
         }
 
-        pre.log {
-            background: var(--log-bg);
-            color: var(--log-fg);
-            border-radius: 8px;
-            padding: 12px;
-            margin: 10px 0 0;
-            height: 300px;
+        button.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+        button.primary:hover { opacity: .88; }
+        button.ghost:hover { color: var(--stop); border-color: var(--stop); }
+
+        /* ── 标签页 ───────────────────────────────────── */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            border-bottom: 1px solid var(--line);
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            border: 0;
+            background: none;
+            border-radius: 0;
+            padding: 9px 14px;
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 12.5px;
+            letter-spacing: .02em;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+
+        .tab:hover { color: var(--ink); border-color: transparent; }
+        .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+        .panel[hidden] { display: none; }
+
+        /* ── 日志 ─────────────────────────────────────── */
+        .console {
+            background: var(--ink);
+            color: color-mix(in srgb, var(--paper) 88%, transparent);
+            border-radius: 10px;
+            padding: 14px 16px;
+            height: 340px;
             overflow: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-family: var(--mono);
             font-size: 12px;
-            line-height: 1.5;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid transparent;
         }
 
-        .toast {
-            position: fixed;
-            right: 20px;
-            bottom: 20px;
-            background: #111827;
-            color: #fff;
-            padding: 10px 16px;
+        html[data-theme="dark"] .console { background: #0c0a09; border-color: var(--line); }
+
+        .panel-head {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+        }
+
+        .panel-head h2 {
+            font-size: 13px; font-weight: 600; margin: 0;
+            font-family: var(--mono); letter-spacing: .02em;
+        }
+
+        .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 16px; }
+
+        /* ── 表单 ─────────────────────────────────────── */
+        .field { margin-bottom: 16px; }
+
+        .field label {
+            display: block; font-family: var(--mono); font-size: 11.5px;
+            letter-spacing: .08em; text-transform: uppercase;
+            color: var(--muted); margin-bottom: 6px;
+        }
+
+        .field .note { color: var(--muted); font-size: 12px; margin-top: 5px; }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            background: var(--card);
+            color: var(--ink);
+            border: 1px solid var(--line-strong);
             border-radius: 8px;
-            opacity: 0;
-            transition: opacity .25s;
-            pointer-events: none;
-            max-width: 60vw;
+            padding: 9px 11px;
+            font-family: var(--mono);
+            font-size: 13px;
         }
 
-        .toast.show { opacity: .95; }
-        .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+        .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+
+        .grid-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 14px;
+            margin: 18px 0 0;
+            padding-top: 18px;
+            border-top: 1px solid var(--line);
+        }
+
+        .grid-status .k {
+            font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--muted);
+        }
+
+        .grid-status .v { font-family: var(--mono); font-size: 13px; margin-top: 3px; word-break: break-all; }
+
+        /* ── Toast ────────────────────────────────────── */
+        .toast {
+            position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(10px);
+            background: var(--ink); color: var(--paper);
+            padding: 10px 18px; border-radius: 999px;
+            font-size: 13px; opacity: 0; pointer-events: none;
+            transition: opacity .2s, transform .2s; max-width: min(80vw, 520px);
+        }
+
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
     </style>
 </head>
 
 <body>
-    <h1>opencode 控制台</h1>
-    <div class="sub">管理本机 opencode Web 服务</div>
-
-    <div class="card">
-        <div class="status">
-            <div class="item">
-                <span class="k">状态</span>
-                <span class="v"><span id="dot" class="dot off"></span><span id="state">检测中…</span></span>
+    <div class="wrap">
+        <header class="bar" id="bar">
+            <div>
+                <span class="wordmark">opencode<span class="caret"></span></span>
+                <span class="tag">控制台</span>
             </div>
-            <div class="item"><span class="k">端口</span><span class="v" id="port">-</span></div>
-            <div class="item"><span class="k">PID</span><span class="v" id="pid">-</span></div>
-            <div class="item"><span class="k">访问密码</span><span class="v" id="pwd">-</span></div>
-            <div class="item"><span class="k">Node.js</span><span class="v" id="nodeDep">-</span></div>
+            <div class="state">
+                <span class="dot" id="dot"></span>
+                <span id="stateText">检测中…</span>
+            </div>
+        </header>
+
+        <div class="cmdline">
+            <span class="prompt">$</span>
+            <code id="cmdline">opencode web --port 14096</code>
+            <span class="meta" id="cmdmeta"></span>
         </div>
-        <div class="row" style="margin-top:14px">
+
+        <div class="actions">
             <button class="primary" id="btnStart">启动</button>
             <button id="btnStop">停止</button>
             <button id="btnRestart">重启</button>
-            <a class="btn" id="btnOpen" href="/" target="_blank" rel="noopener">打开 Web UI</a>
+            <a class="btn" id="btnOpen" target="_blank" rel="noopener">打开 Web UI</a>
         </div>
-        <div class="hint">需要运行 Node.js 工具或 MCP Server 时，请先在飞牛应用中心安装 Node.js 应用。</div>
-    </div>
 
-    <div class="card">
-        <div class="row" style="justify-content:space-between">
-            <strong>程序日志</strong>
-            <div class="row">
-                <button id="btnLogRefresh">刷新</button>
-                <button class="danger" id="btnLogClear">清空</button>
+        <nav class="tabs" role="tablist">
+            <button class="tab" role="tab" data-tab="log" aria-selected="true">日志</button>
+            <button class="tab" role="tab" data-tab="config" aria-selected="false">设置</button>
+            <button class="tab" role="tab" data-tab="upgrade" aria-selected="false">升级与备份</button>
+        </nav>
+
+        <!-- 日志 -->
+        <section class="panel" id="panel-log" role="tabpanel">
+            <div class="panel-head">
+                <h2>程序日志</h2>
+                <div class="actions" style="margin:0">
+                    <button id="btnLogRefresh">刷新</button>
+                    <button class="ghost" id="btnLogClear">清空</button>
+                </div>
             </div>
-        </div>
-        <pre class="log" id="log">加载中…</pre>
-    </div>
-
-    <div class="card">
-        <div class="row" style="justify-content:space-between">
-            <strong>在线升级</strong>
-            <div class="row">
-                <button class="primary" id="btnUpgrade">升级到最新版</button>
-                <button id="btnUpLogRefresh">刷新升级日志</button>
+            <div class="console" id="log">加载中…</div>
+            <div class="grid-status">
+                <div><div class="k">端口</div><div class="v" id="sPort">-</div></div>
+                <div><div class="k">PID</div><div class="v" id="sPid">-</div></div>
+                <div><div class="k">用户名</div><div class="v" id="sUser">-</div></div>
+                <div><div class="k">工作目录</div><div class="v" id="sWorkdir">-</div></div>
+                <div><div class="k">Node.js</div><div class="v" id="sNode">-</div></div>
             </div>
-        </div>
-        <div class="hint">从 GitHub 拉取最新 opencode 二进制并重启服务。升级期间服务会短暂中断。</div>
-        <pre class="log" id="upgradeLog" style="height:180px">暂无升级记录</pre>
-    </div>
+        </section>
 
-    <div class="card">
-        <strong>密码</strong>
-        <div class="row" style="margin-top:12px">
-            <input type="password" id="newPwd" placeholder="输入新的访问密码" />
-            <button id="btnResetPwd">重置密码</button>
-        </div>
-        <div class="hint">重置后服务会停止，请在控制台重新启动。新密码用于登录 opencode Web UI（用户名固定为 opencode）。</div>
-    </div>
+        <!-- 设置 -->
+        <section class="panel" id="panel-config" role="tabpanel" hidden>
+            <div class="panel-head"><h2>访问与目录</h2></div>
+            <p class="hint">修改后服务会停止，需要回到「启动」重新拉起。密码留空表示不修改。</p>
 
-    <div class="card">
-        <strong>备份</strong>
-        <div class="row" style="margin-top:12px">
-            <a class="btn" id="btnBackup" href="#">下载数据备份 (.tar.gz)</a>
-        </div>
-        <div class="hint">包含配置、会话记录与凭据，请妥善保管。</div>
-    </div>
+            <div class="row2">
+                <div class="field">
+                    <label for="cfgUser">登录用户名</label>
+                    <input type="text" id="cfgUser" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="cfgPass">访问密码</label>
+                    <input type="password" id="cfgPass" autocomplete="new-password" placeholder="留空则保持不变" />
+                    <div class="note" id="passNote"></div>
+                </div>
+            </div>
 
-    <div class="toast" id="toast"></div>
+            <div class="field">
+                <label for="cfgWorkdir">工作目录</label>
+                <input type="text" id="cfgWorkdir" list="sharesList" autocomplete="off" placeholder="留空则使用应用数据目录" />
+                <datalist id="sharesList"></datalist>
+                <div class="note">opencode 的默认项目目录。选择或填写已授权给本应用的路径，例如 /vol1/1000/projects。</div>
+            </div>
+
+            <div class="field">
+                <label for="cfgLevel">日志级别</label>
+                <select id="cfgLevel">
+                    <option value="info">Info - 常规信息</option>
+                    <option value="debug">Debug - 调试信息</option>
+                    <option value="warn">Warn - 警告</option>
+                    <option value="error">Error - 错误</option>
+                </select>
+            </div>
+
+            <button class="primary" id="btnSave">保存设置</button>
+        </section>
+
+        <!-- 升级与备份 -->
+        <section class="panel" id="panel-upgrade" role="tabpanel" hidden>
+            <div class="panel-head">
+                <h2>在线升级</h2>
+                <div class="actions" style="margin:0">
+                    <button class="primary" id="btnUpgrade">升级到最新版</button>
+                    <button id="btnUpLogRefresh">刷新日志</button>
+                </div>
+            </div>
+            <p class="hint">从 GitHub 拉取与当前架构匹配的最新 opencode 二进制并重启服务，期间服务短暂中断。</p>
+            <div class="console" id="upgradeLog" style="height:200px">暂无升级记录</div>
+
+            <div class="panel-head" style="margin-top:28px">
+                <h2>数据备份</h2>
+                <div class="actions" style="margin:0">
+                    <a class="btn" id="btnBackup" href="#">下载备份 (.tar.gz)</a>
+                </div>
+            </div>
+            <p class="hint">打包整个数据目录，包含配置、会话记录与登录凭据，请妥善保管。</p>
+        </section>
+
+        <div class="toast" id="toast"></div>
+    </div>
 
     <script>
-        const API = location.pathname.split('/index.cgi')[0] + '/api.cgi';
+        const BASE = location.pathname.split('/index.cgi')[0];
+        const API = BASE + '/api.cgi';
+        const $ = (id) => document.getElementById(id);
+
+        // 跟随 fnOS / 系统主题
+        (function theme() {
+            let pref = null;
+            try {
+                for (const k of ['userPreference', 'theme', 'fnos-theme']) {
+                    const raw = localStorage.getItem(k);
+                    if (!raw) continue;
+                    if (k === 'userPreference') { const o = JSON.parse(raw); pref = o && o.theme; }
+                    else { pref = raw; }
+                    if (pref != null) break;
+                }
+            } catch (e) { }
+            const dark = (pref === 20 || pref === 'dark')
+                || (pref !== 10 && pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.dataset.theme = 'dark';
+        })();
 
         function toast(msg) {
-            const el = document.getElementById('toast');
+            const el = $('toast');
             el.textContent = msg;
             el.classList.add('show');
             clearTimeout(el._t);
-            el._t = setTimeout(() => el.classList.remove('show'), 2600);
+            el._t = setTimeout(() => el.classList.remove('show'), 2800);
         }
 
-        async function call(action, opts) {
-            const res = await fetch(`${API}?action=${action}`, Object.assign({ method: 'POST' }, opts || {}));
-            return res.json();
+        async function get(action) {
+            const r = await fetch(`${API}?action=${action}`);
+            return r.json();
+        }
+
+        async function post(action, params) {
+            const qs = Object.entries(params || {})
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+            const r = await fetch(`${API}?action=${action}${qs ? '&' + qs : ''}`, { method: 'POST' });
+            return r.json();
         }
 
         async function refreshStatus() {
             try {
-                const d = await fetch(`${API}?action=status`).then(r => r.json());
+                const d = await get('status');
                 const on = !!d.running;
-                document.getElementById('dot').className = 'dot ' + (on ? 'on' : 'off');
-                document.getElementById('state').textContent = on ? '运行中' : '已停止';
-                document.getElementById('port').textContent = d.port || '-';
-                document.getElementById('pid').textContent = d.pid || '-';
-                document.getElementById('pwd').textContent = d.passwordSet ? '已设置' : '未设置';
-            } catch (e) {
-                document.getElementById('state').textContent = '无法连接控制台';
-            }
+                $('dot').className = 'dot ' + (on ? 'on' : 'off');
+                $('stateText').textContent = on ? '运行中' : '已停止';
+                $('bar').classList.toggle('running', on);
+                $('sPort').textContent = d.port || '-';
+                $('sPid').textContent = d.pid || '-';
+                $('btnOpen').href = `${location.protocol}//${location.hostname}:${d.port || 14096}/`;
+                $('cmdline').textContent = `opencode web --port ${d.port || 14096}`;
+            } catch (e) { $('stateText').textContent = '无法连接控制台'; }
         }
 
         async function refreshDeps() {
             try {
-                const d = await fetch(`${API}?action=check_deps`).then(r => r.json());
-                document.getElementById('nodeDep').textContent = d.node ? '已安装' : '未安装';
-            } catch (e) {
-                document.getElementById('nodeDep').textContent = '-';
-            }
-        }
-
-        async function refreshLog() {
-            const el = document.getElementById('log');
-            try {
-                const d = await fetch(`${API}?action=logs`).then(r => r.json());
-                el.textContent = (d.logs && d.logs.length) ? d.logs.join('\n') : '（暂无日志）';
-                el.scrollTop = el.scrollHeight;
-            } catch (e) {
-                el.textContent = '读取日志失败';
-            }
-        }
-
-        async function refreshUpgradeLog() {
-            const el = document.getElementById('upgradeLog');
-            try {
-                const d = await fetch(`${API}?action=upgrade_logs`).then(r => r.json());
-                el.textContent = (d.logs && d.logs.length) ? d.logs.join('\n') : '暂无升级记录';
-                el.scrollTop = el.scrollHeight;
+                const d = await get('check_deps');
+                $('sNode').textContent = d.node ? '已安装' : '未安装';
             } catch (e) { }
         }
 
-        async function action(name, okMsg) {
-            const btns = document.querySelectorAll('button');
-            btns.forEach(b => b.disabled = true);
+        async function loadConfig() {
             try {
-                const d = await call(name);
-                toast(d.message || (d.success ? '操作成功' : '操作失败'));
-            } catch (e) {
-                toast('请求失败：' + e.message);
-            } finally {
-                btns.forEach(b => b.disabled = false);
-                setTimeout(refreshStatus, 800);
-                setTimeout(refreshLog, 1200);
+                const d = await get('get_config');
+                $('cfgUser').value = d.username || '';
+                $('cfgWorkdir').value = d.workdir || '';
+                $('sUser').textContent = d.username || '-';
+                $('sWorkdir').textContent = d.workdir || d.defaultWorkdir || '-';
+                $('cmdmeta').textContent = d.workdir || d.defaultWorkdir || '';
+                $('passNote').textContent = d.passwordSet ? '当前已设置密码。' : '当前未设置密码。';
+                if (d.logLevel) $('cfgLevel').value = d.logLevel;
+                const list = $('sharesList');
+                list.innerHTML = '';
+                String(d.shares || '').split(':').filter(Boolean).forEach((p) => {
+                    const o = document.createElement('option'); o.value = p; list.appendChild(o);
+                });
+            } catch (e) { }
+        }
+
+        function readLog(el, d) {
+            el.textContent = (d.logs && d.logs.length) ? d.logs.join('\n') : '（暂无日志）';
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function refreshLog() {
+            try { readLog($('log'), await get('logs')); } catch (e) { $('log').textContent = '读取日志失败'; }
+        }
+
+        async function refreshUpgradeLog() {
+            try {
+                const d = await get('upgrade_logs');
+                $('upgradeLog').textContent = (d.logs && d.logs.length) ? d.logs.join('\n') : '暂无升级记录';
+                $('upgradeLog').scrollTop = $('upgradeLog').scrollHeight;
+            } catch (e) { }
+        }
+
+        async function doAction(name) {
+            document.querySelectorAll('button').forEach((b) => (b.disabled = true));
+            try {
+                const d = await post(name);
+                toast(d.message || (d.success ? '完成' : '失败'));
+            } catch (e) { toast('请求失败：' + e.message); }
+            finally {
+                document.querySelectorAll('button').forEach((b) => (b.disabled = false));
+                setTimeout(() => { refreshStatus(); loadConfig(); refreshLog(); }, 900);
             }
         }
 
-        document.getElementById('btnStart').onclick = () => action('start');
-        document.getElementById('btnStop').onclick = () => action('stop');
-        document.getElementById('btnRestart').onclick = () => action('restart');
-        document.getElementById('btnLogRefresh').onclick = refreshLog;
-        document.getElementById('btnLogClear').onclick = () => { if (confirm('确定清空日志？')) action('clear_logs'); };
-        document.getElementById('btnUpLogRefresh').onclick = refreshUpgradeLog;
-        document.getElementById('btnUpgrade').onclick = () => {
-            if (confirm('确定升级到最新版？服务会短暂中断。')) { action('upgrade'); setInterval(refreshUpgradeLog, 2000); }
+        $('btnStart').onclick = () => doAction('start');
+        $('btnStop').onclick = () => doAction('stop');
+        $('btnRestart').onclick = () => doAction('restart');
+        $('btnLogRefresh').onclick = refreshLog;
+        $('btnLogClear').onclick = () => { if (confirm('确定清空日志？')) doAction('clear_logs'); };
+        $('btnUpLogRefresh').onclick = refreshUpgradeLog;
+        $('btnUpgrade').onclick = () => {
+            if (confirm('确定升级到最新版？服务会短暂中断。')) {
+                doAction('upgrade');
+                const t = setInterval(() => { refreshUpgradeLog(); if (!document.hidden) { } }, 2000);
+                setTimeout(() => clearInterval(t), 120000);
+            }
         };
-        document.getElementById('btnBackup').onclick = () => { location.href = `${API}?action=backup_download`; };
-        document.getElementById('btnResetPwd').onclick = async () => {
-            const v = document.getElementById('newPwd').value.trim();
-            if (v.length < 6) { toast('密码至少 6 位'); return; }
-            const d = await call('reset_auth&password=' + encodeURIComponent(v));
-            toast(d.message || '已提交');
-            document.getElementById('newPwd').value = '';
-            refreshStatus();
+        $('btnBackup').onclick = () => { location.href = `${API}?action=backup_download`; };
+        $('btnSave').onclick = async () => {
+            const d = await post('save_config', {
+                username: $('cfgUser').value.trim(),
+                password: $('cfgPass').value,
+                log_level: $('cfgLevel').value,
+                workdir: $('cfgWorkdir').value.trim(),
+            });
+            toast(d.message || '已保存');
+            $('cfgPass').value = '';
+            refreshStatus(); loadConfig();
         };
 
-        document.getElementById('btnOpen').href = location.protocol + '//' + location.hostname + ':14096/';
+        document.querySelectorAll('.tab').forEach((t) => {
+            t.onclick = () => {
+                document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', 'false'));
+                t.setAttribute('aria-selected', 'true');
+                ['log', 'config', 'upgrade'].forEach((n) => { $('panel-' + n).hidden = (n !== t.dataset.tab); });
+                if (t.dataset.tab === 'log') refreshLog();
+                if (t.dataset.tab === 'upgrade') refreshUpgradeLog();
+                if (t.dataset.tab === 'config') loadConfig();
+            };
+        });
 
         refreshStatus();
         refreshDeps();
+        loadConfig();
         refreshLog();
-        refreshUpgradeLog();
         setInterval(refreshStatus, 5000);
     </script>
 </body>

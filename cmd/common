@@ -15,6 +15,7 @@ DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 ENV_FILE="${TRIM_PKGETC}/opencode.env"
 PID_FILE="${TRIM_PKGVAR}/opencode.pid"
 LOG_FILE="${TRIM_PKGVAR}/opencode.log"
+SHARES_FILE="${TRIM_PKGVAR}/shares.list"
 PORT="${TRIM_SERVICE_PORT:-14096}"
 
 # ── 运行环境 ────────────────────────────────────────────
@@ -57,8 +58,41 @@ load_env() {
         # shellcheck disable=SC1090
         . "${ENV_FILE}"
     fi
+    export OPENCODE_SERVER_USERNAME="${OPENCODE_SERVER_USERNAME:-opencode}"
     export OPENCODE_SERVER_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
     export OPENCODE_LOG_LEVEL="${OPENCODE_LOG_LEVEL:-info}"
+}
+
+# opencode 解析工作目录时 web/serve 会用 --dir（旧版本为 --cwd）。
+# 这里探测二进制实际支持的参数，避免版本差异导致启动失败。
+web_dir_flag() {
+    local help
+    help="$("${BIN}" web --help 2>&1)"
+    if echo "${help}" | grep -q -- '--dir'; then
+        echo "--dir"
+    elif echo "${help}" | grep -q -- '--cwd'; then
+        echo "--cwd"
+    fi
+}
+
+# 工作目录：优先用户配置，其次共享数据目录。
+resolve_workdir() {
+    local wd="${OPENCODE_WORKDIR:-}"
+    if [ -z "${wd}" ] || [ ! -d "${wd}" ]; then
+        wd="${DATA_DIR}"
+    fi
+    echo "${wd}"
+}
+
+# 记录所有已授权的共享目录，供控制台下拉选择。
+dump_shares() {
+    : > "${SHARES_FILE}" 2>/dev/null
+    local old_ifs="${IFS}"
+    IFS=':'
+    for p in ${TRIM_DATA_SHARE_PATHS}; do
+        [ -n "${p}" ] && echo "${p}" >> "${SHARES_FILE}"
+    done
+    IFS="${old_ifs}"
 }
 
 status() {
@@ -84,11 +118,23 @@ start_process() {
     fi
 
     load_env
+    dump_shares
     mkdir -p "${HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}"
-    log_msg "启动 opencode web，端口 ${PORT}"
 
-    cd "${DATA_DIR}" || cd /tmp
-    nohup "${BIN}" web --hostname 0.0.0.0 --port "${PORT}" >> "${LOG_FILE}" 2>&1 &
+    local wd dirflag
+    wd="$(resolve_workdir)"
+    dirflag="$(web_dir_flag)"
+    mkdir -p "${wd}" 2>/dev/null
+
+    local -a dirargs=()
+    if [ -n "${dirflag}" ]; then
+        dirargs=("${dirflag}" "${wd}")
+    fi
+
+    log_msg "启动 opencode web，端口 ${PORT}，工作目录 ${wd}${dirflag:+ (${dirflag})}"
+
+    cd "${wd}" || cd /tmp
+    nohup "${BIN}" web --hostname 0.0.0.0 --port "${PORT}" "${dirargs[@]}" >> "${LOG_FILE}" 2>&1 &
     echo "$!" > "${PID_FILE}"
 
     local n=0
@@ -146,8 +192,10 @@ install_init() {
 }
 
 install_callback() {
+    local user="${wizard_server_username:-opencode}"
     local pass="${wizard_server_password:-}"
     local level="${wizard_log_level:-info}"
+    local wdir="${wizard_workdir:-}"
 
     # 安装完成后才校验二进制是否就位
     if [ ! -f "${BIN}" ]; then
@@ -171,9 +219,11 @@ install_callback() {
     log_msg "写入运行时配置 ..."
     umask 022
     {
-        echo "# opencode 运行时配置（由飞牛安装向导生成，请勿手工修改结构）"
+        echo "# opencode 运行时配置（由飞牛安装向导生成，控制台可修改）"
+        printf 'OPENCODE_SERVER_USERNAME=%s\n' "${user}"
         printf 'OPENCODE_SERVER_PASSWORD=%s\n' "${pass}"
         printf 'OPENCODE_LOG_LEVEL=%s\n' "${level}"
+        printf 'OPENCODE_WORKDIR=%s\n' "${wdir}"
     } > "${ENV_FILE}"
     chmod 600 "${ENV_FILE}" 2>/dev/null
 
