@@ -77,7 +77,7 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 「opencode 控制台」分三个标签页：
 
 - **日志**：服务状态（端口 / PID / 用户名 / 工作目录 / Node.js）、启停与重启、`var/opencode.log` 内容与清空。
-- **设置**：修改登录用户名、访问密码、工作目录与日志级别。用户名与密码对应 opencode 的 HTTP Basic 认证（`OPENCODE_SERVER_USERNAME` / `OPENCODE_SERVER_PASSWORD`）；保存后服务会停止，需重新启动。
+- **设置**：修改登录用户名、访问密码、工作目录与日志级别。用户名与密码对应 opencode 的 HTTP Basic 认证（`OPENCODE_SERVER_USERNAME` / `OPENCODE_SERVER_PASSWORD`）；保存后服务会**自动重启**使配置生效。
 - **升级与备份**：从 GitHub Releases 拉取与当前架构匹配的最新二进制（原子替换后自动重启，x86 无 AVX2 时自动选 `x64-baseline`）；以及打包数据目录为 `.tar.gz` 下载。
 
 工作目录通过 `opencode web --dir <路径>` 指定（旧版本为 `--cwd`，脚本会自动探测）。留空则使用应用数据目录；指向 NAS 其他目录前，请先在飞牛应用设置里把该目录授权给本应用。

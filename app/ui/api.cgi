@@ -108,33 +108,38 @@ write_env() {
     chmod 600 "${ENV_FILE}" 2>/dev/null
 }
 
-do_start() {
+# 静默启动：不输出 JSON，仅返回状态码（0 成功 / 2 无二进制 / 1 启动失败）
+_start() {
     if [ -f "${PID_FILE}" ]; then
         local pid
         pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
-        if check_process "${pid}"; then
-            json_header
-            printf '{"success":true,"message":"opencode 已在运行"}\n'
-            return 0
-        fi
+        check_process "${pid}" && return 0
         rm -f "${PID_FILE}"
     fi
-    if [ ! -x "${BIN}" ]; then
-        json_error "找不到可执行文件，请重新安装"
-        return 0
-    fi
+    [ -x "${BIN}" ] || return 2
     load_env
     mkdir -p "${DATA_DIR}"
     nohup bash -c "$(backend_cmd)" >> "${LOG_FILE}" 2>&1 &
     echo "$!" > "${PID_FILE}"
     sleep 2
-    if check_process "$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"; then
-        json_header
-        printf '{"success":true,"message":"opencode 启动成功"}\n'
-    else
-        rm -f "${PID_FILE}"
-        json_error "启动失败，请查看日志"
+    local np
+    np="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+    if check_process "${np}"; then
+        return 0
     fi
+    rm -f "${PID_FILE}"
+    return 1
+}
+
+do_start() {
+    local rc
+    _start
+    rc=$?
+    case "${rc}" in
+    0) json_header; printf '{"success":true,"message":"opencode 已启动"}\n' ;;
+    2) json_error "找不到可执行文件，请重新安装" ;;
+    *) json_error "启动失败，请查看日志" ;;
+    esac
 }
 
 do_stop() {
@@ -245,9 +250,15 @@ do_save_config() {
         pass="${OPENCODE_SERVER_PASSWORD}"
     fi
 
-    if [ -n "${wdir}" ] && [ ! -d "${wdir}" ]; then
-        json_error "工作目录不存在：${wdir}"
-        return
+    local warn=""
+    if [ -n "${wdir}" ]; then
+        if [ ! -d "${wdir}" ]; then
+            json_error "工作目录不存在：${wdir}（请先在应用设置里授权该目录）"
+            return
+        fi
+        if [ ! -w "${wdir}" ]; then
+            warn="（注意：工作目录可能无写权限，opencode 或无法修改文件）"
+        fi
     fi
     if ! echo "${user}" | grep -qE '^[a-zA-Z0-9_.-]+$'; then
         json_error "用户名只能包含字母、数字、下划线、点和连字符"
@@ -255,9 +266,19 @@ do_save_config() {
     fi
 
     write_env "${user}" "${pass}" "${level}" "${wdir}"
+
+    # 保存后立即重启，避免应用长时间处于停止状态（会被 app-center 判为异常退出）
     do_stop > /dev/null
+    sleep 1
+    local rc
+    _start
+    rc=$?
     json_header
-    printf '{"success":true,"message":"设置已保存，服务已停止，请点击启动"}\n'
+    if [ "${rc}" -eq 0 ]; then
+        printf '{"success":true,"message":"设置已保存，服务已重启%s"}\n' "${warn}"
+    else
+        printf '{"success":false,"message":"设置已保存，但服务启动失败，请查看日志"}\n'
+    fi
 }
 
 do_restart() {
