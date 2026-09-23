@@ -122,13 +122,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          mv com.opencode.web.fpk "dist/com.opencode.web_v${VERSION}.fpk"
+          mv opencode.fpk "dist/opencode_v${VERSION}.fpk"
           ls -la dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: com.opencode.web_v${{ needs.check.outputs.version }}
+          name: opencode_v${{ needs.check.outputs.version }}
           path: dist/*.fpk
           retention-days: 30
 

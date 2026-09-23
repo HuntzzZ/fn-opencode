@@ -1,21 +1,21 @@
 {
     ".url": {
-        "com.opencode.web.Application": {
+        "opencode.Application": {
             "title": "opencode",
             "icon": "images/icon_{0}.png",
             "type": "iframe",
             "protocol": "http",
             "gatewaySocket": "web.sock",
-            "gatewayPrefix": "/app/com.opencode.web",
-            "url": "/app/com.opencode.web/",
+            "gatewayPrefix": "/app/opencode",
+            "url": "/app/opencode/",
             "allUsers": true
         },
-        "com.opencode.web.console": {
+        "opencode.console": {
             "title": "opencode 控制台",
             "icon": "images/console_{0}.png",
             "type": "iframe",
             "protocol": "http",
-            "url": "/cgi/ThirdParty/com.opencode.web/index.cgi/",
+            "url": "/cgi/ThirdParty/opencode/index.cgi/",
             "allUsers": true
         }
     }

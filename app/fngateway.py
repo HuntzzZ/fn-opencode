@@ -486,7 +486,7 @@ def main():
     parser = argparse.ArgumentParser(description="fnOS 子路径反向代理网关")
     parser.add_argument("--listen", required=True, help="后端地址，如 127.0.0.1:14096")
     parser.add_argument("--socket", required=True, help="监听的 Unix socket 路径")
-    parser.add_argument("--prefix", required=True, help="网关前缀，如 /app/com.opencode.web")
+    parser.add_argument("--prefix", required=True, help="网关前缀，如 /app/opencode")
     args = parser.parse_args()
 
     host, port = parse_listen(args.listen)

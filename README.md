@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File scripts\fetch-opencode.ps1
 
 # 3. 打包
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1
-#  产物：dist\com.opencode.web_v<version>.fpk
+#  产物：dist\opencode_v<version>.fpk
 ```
 
 也可以直接跳到第 3 步，`build.ps1` 会在缺件时自动调用前两步。
@@ -60,10 +60,10 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 
 | 路径 | 用途 |
 |---|---|
-| `/var/apps/com.opencode.web/target/opencode` | 二进制 |
-| `/var/apps/com.opencode.web/etc/opencode.env` | 密码 / 日志级别（持久，升级保留） |
-| `/var/apps/com.opencode.web/var/` | 运行日志与 PID |
-| `/var/apps/com.opencode.web/shares/com.opencode.web/` | 数据目录（`HOME`/XDG，用户可在文件管理器访问） |
+| `/var/apps/opencode/target/opencode` | 二进制 |
+| `/var/apps/opencode/etc/opencode.env` | 密码 / 日志级别（持久，升级保留） |
+| `/var/apps/opencode/var/` | 运行日志与 PID |
+| `/var/apps/opencode/shares/opencode/` | 数据目录（`HOME`/XDG，用户可在文件管理器访问） |
 
 服务启动命令等价于：
 
@@ -89,7 +89,7 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 - **升级本应用**（覆盖安装）会保留 `etc/` 与 `shares/`，数据不丢；卸载向导可选择是否删除数据目录。
 - **安全**：opencode 具备文件读写与命令执行能力，且入口对所有用户可见；请务必设置强密码，不要把 14096 端口直接暴露到公网。
 - **`.cgi` 执行权限**：若真机上控制台报 502/无法执行，SSH 到飞牛执行
-  `sudo chmod +x /var/apps/com.opencode.web/target/ui/index.cgi /var/apps/com.opencode.web/target/ui/api.cgi`。
+  `sudo chmod +x /var/apps/opencode/target/ui/index.cgi /var/apps/opencode/target/ui/api.cgi`。
 - 若 `iframe` 方式打开本体出现资源 404（子路径问题），可改用子路径网关方案（参考 `fngateway.py` 思路）。
 
 ## 修改默认值
@@ -100,7 +100,7 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 
 ## 远程访问 / 反向代理
 
-桌面「opencode」入口使用飞牛的网关模式（`gatewaySocket` + `gatewayPrefix`），走**同源路径** `/app/com.opencode.web/`：
+桌面「opencode」入口使用飞牛的网关模式（`gatewaySocket` + `gatewayPrefix`），走**同源路径** `/app/opencode/`：
 
 - 因此无论是局域网 IP、还是经 Lucky / Nginx 等反代到公网域名（https），都能直接打开，**不需要额外转发 14096 端口**，也不会触发浏览器的混合内容拦截；
 - 应用内的 `fngateway.py` 监听 `target/web.sock`，把飞牛网关转来的请求转发到本地 `127.0.0.1:14096`，并把 SPA 的绝对路径/`fetch`/`XHR`/`WebSocket` 改写到该前缀下；

@@ -1,11 +1,11 @@
 #!/bin/bash
 # api.cgi —— opencode 控制台后端 API
-# 用法: /cgi/ThirdParty/com.opencode.web/api.cgi?action=<name>
+# 用法: /cgi/ThirdParty/opencode/api.cgi?action=<name>
 #   status | start | stop | restart | logs | clear_logs | check_deps
 #   get_config | save_config | backup_download | upgrade | upgrade_status | upgrade_logs
 # 写操作要求 POST。
 
-APP_ID="com.opencode.web"
+APP_ID="opencode"
 APP_ROOT="/var/apps/${APP_ID}"
 BIN="${APP_ROOT}/target/opencode"
 GATEWAY_PY="${APP_ROOT}/target/fngateway.py"

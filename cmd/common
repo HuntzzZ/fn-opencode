@@ -1,7 +1,7 @@
 #!/bin/bash
 # 公共函数库：所有 cmd 脚本共用。逻辑集中在这里，其它脚本只做转发。
 
-APP_ID="com.opencode.web"
+APP_ID="opencode"
 
 # ── 路径 ────────────────────────────────────────────────
 # TRIM_APPDEST: 程序目录  /var/apps/<app>/target

@@ -4,12 +4,12 @@
         "shares":
         [
             {
-                "name": "com.opencode.web",
+                "name": "opencode",
                 "permission":
                 {
                     "rw":
                     [
-                        "com.opencode.web"
+                        "opencode"
                     ]
                 }
             }

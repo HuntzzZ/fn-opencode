@@ -1,9 +1,9 @@
 #!/bin/bash
 # index.cgi —— 控制台静态文件服务器
-# 访问路径: /cgi/ThirdParty/com.opencode.web/index.cgi/<path>
+# 访问路径: /cgi/ThirdParty/opencode/index.cgi/<path>
 # 实际文件: app/www/<path>
 
-APP_ID="com.opencode.web"
+APP_ID="opencode"
 BASE_PATH="/var/apps/${APP_ID}/target/www"
 
 URI_NO_QUERY="${REQUEST_URI%%\?*}"
