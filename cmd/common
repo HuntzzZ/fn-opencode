@@ -121,11 +121,14 @@ dump_env() {
 
 # 子路径网关：把飞牛网关转来的 /app/<appname>/ 请求转到本地 opencode 端口
 python_bin() {
-    if [ -x "/var/apps/python312/target/bin/python3" ]; then
-        echo "/var/apps/python312/target/bin/python3"
-    else
-        command -v python3 2>/dev/null || echo "python3"
-    fi
+    local p
+    for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+        if [ -x "${p}" ]; then
+            echo "${p}"
+            return
+        fi
+    done
+    command -v python3 2>/dev/null || echo "python3"
 }
 
 start_gateway() {
@@ -136,6 +139,11 @@ start_gateway() {
     stop_gateway
     local py
     py="$(python_bin)"
+    if [ ! -x "${py}" ] && ! command -v "${py}" >/dev/null 2>&1; then
+        log_msg "警告：找不到 python3（${py}），网关无法启动"
+        return 1
+    fi
+    log_msg "启动网关，Python: ${py}"
     nohup "${py}" -u "${GATEWAY_PY}" \
         --listen "127.0.0.1:${PORT}" \
         --socket "${GATEWAY_SOCK}" \

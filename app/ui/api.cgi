@@ -95,11 +95,14 @@ resolve_workdir() {
 }
 
 python_bin() {
-    if [ -x "/var/apps/python312/target/bin/python3" ]; then
-        echo "/var/apps/python312/target/bin/python3"
-    else
-        command -v python3 2>/dev/null || echo "python3"
-    fi
+    local p
+    for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+        if [ -x "${p}" ]; then
+            echo "${p}"
+            return
+        fi
+    done
+    command -v python3 2>/dev/null || echo "python3"
 }
 
 start_gateway() {
@@ -107,6 +110,11 @@ start_gateway() {
     stop_gateway
     local py
     py="$(python_bin)"
+    if [ ! -x "${py}" ] && ! command -v "${py}" >/dev/null 2>&1; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - 找不到 python3（${py}），网关无法启动" >> "${GATEWAY_LOG}"
+        return 1
+    fi
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - 启动网关，Python: ${py}" >> "${GATEWAY_LOG}"
     nohup "${py}" -u "${GATEWAY_PY}" \
         --listen "127.0.0.1:${PORT}" \
         --socket "${GATEWAY_SOCK}" \
@@ -272,6 +280,15 @@ do_diag() {
     if [ -f "${var_dir}/env.dump" ]; then cat "${var_dir}/env.dump" | json_lines; else printf '[]'; fi
     printf ',"envFileContent":'
     if [ -f "${ENV_FILE}" ]; then cat "${ENV_FILE}" | json_lines; else printf '[]'; fi
+    printf ',"gatewayPy":"%s","gatewayPyExists":%s,' "${GATEWAY_PY}" "$([ -f "${GATEWAY_PY}" ] && echo true || echo false)"
+    printf '"gatewaySock":"%s","gatewaySockExists":%s,' "${GATEWAY_SOCK}" "$([ -S "${GATEWAY_SOCK}" ] && echo true || echo false)"
+    printf '"gatewayProc":"%s",' "$(pgrep -f fngateway.py 2>/dev/null | tr '\n' ' ')"
+    printf '"pythonBin":"%s","pythonOk":%s,' "$(python_bin)" "$([ -x "$(python_bin)" ] && echo true || echo false)"
+    printf '"workdirExists":%s,' "$([ -n "${OPENCODE_WORKDIR:-}" ] && [ -d "${OPENCODE_WORKDIR}" ] && echo true || echo false)"
+    printf '"targetListing":'
+    ls -la "${APP_ROOT}/target" 2>&1 | json_lines
+    printf ',"gatewayLog":'
+    if [ -f "${GATEWAY_LOG}" ]; then tail -n 60 "${GATEWAY_LOG}" | json_lines; else printf '[]'; fi
     printf '}\n'
 }
 
