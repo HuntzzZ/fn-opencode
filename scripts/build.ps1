@@ -35,9 +35,9 @@ if (-not (Test-Path (Join-Path $root "ICON.PNG"))) {
 # ---- version -----------------------------------------------------------
 $manifestPath = Join-Path $root "manifest"
 if ($Version) {
-    $content = Get-Content -Raw -Encoding UTF8 $manifestPath
+    $content = [System.IO.File]::ReadAllText($manifestPath)
     $content = [Regex]::Replace($content, "(?m)^version\s*=.*$", "version                    = $Version")
-    Set-Content -Path $manifestPath -Value $content -Encoding UTF8 -NoNewline
+    [System.IO.File]::WriteAllText($manifestPath, $content, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "manifest version -> $Version"
 }
 
