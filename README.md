@@ -108,6 +108,16 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 
 > 若你之前用 `port` 方式访问，域名下会失败（端口没转发 + https 页面加载 http iframe）；改用网关模式后即正常。
 
+**统一网关所需的 manifest 字段**（缺少会导致 `/app/<appname>` 返回 404，飞牛不会把请求转发到 socket）：
+
+```ini
+os_min_version = 1.2.0401   # 统一网关要求 ≥ 1.2.0401
+micro_app      = true       # 必须声明，否则网关不注册路由
+ctl_stop       = true       # 显示启停控制
+```
+
+> 社区还记录过一个飞牛框架问题：个别应用安装后 `appcenter.app_service` 表的 `gateway_socket`/`gateway_prefix` 为空，导致 404，需要 root 执行 SQL 并重启 `trim_http_cgi`。若上面的字段已就位仍 404，可检查此项。
+
 ## 可选：多架构与运行时依赖
 
 ### 支持 arm64
