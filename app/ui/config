@@ -1,11 +1,13 @@
-{
+﻿{
     ".url": {
         "com.opencode.web.Application": {
             "title": "opencode",
             "icon": "images/icon_{0}.png",
             "type": "iframe",
             "protocol": "http",
-            "port": "14096",
+            "gatewaySocket": "web.sock",
+            "gatewayPrefix": "/app/com.opencode.web",
+            "url": "/app/com.opencode.web/",
             "allUsers": true
         },
         "com.opencode.web.console": {

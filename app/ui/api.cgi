@@ -8,6 +8,10 @@
 APP_ID="com.opencode.web"
 APP_ROOT="/var/apps/${APP_ID}"
 BIN="${APP_ROOT}/target/opencode"
+GATEWAY_PY="${APP_ROOT}/target/fngateway.py"
+GATEWAY_SOCK="${APP_ROOT}/target/web.sock"
+GATEWAY_PREFIX="/app/${APP_ID}"
+GATEWAY_LOG="${APP_ROOT}/var/fngateway.log"
 DATA_DIR="${APP_ROOT}/shares/${APP_ID}"
 ENV_FILE="${APP_ROOT}/etc/opencode.env"
 PID_FILE="${APP_ROOT}/var/opencode.pid"
@@ -90,6 +94,31 @@ resolve_workdir() {
     echo "${wd}"
 }
 
+python_bin() {
+    if [ -x "/var/apps/python312/target/bin/python3" ]; then
+        echo "/var/apps/python312/target/bin/python3"
+    else
+        command -v python3 2>/dev/null || echo "python3"
+    fi
+}
+
+start_gateway() {
+    [ -f "${GATEWAY_PY}" ] || return 0
+    stop_gateway
+    local py
+    py="$(python_bin)"
+    nohup "${py}" -u "${GATEWAY_PY}" \
+        --listen "127.0.0.1:${PORT}" \
+        --socket "${GATEWAY_SOCK}" \
+        --prefix "${GATEWAY_PREFIX}" >> "${GATEWAY_LOG}" 2>&1 &
+    sleep 1
+}
+
+stop_gateway() {
+    pkill -f "${GATEWAY_PY}" 2>/dev/null
+    rm -f "${GATEWAY_SOCK}" 2>/dev/null
+}
+
 backend_cmd() {
     local wd dirflag dirargs=""
     wd="$(resolve_workdir)"
@@ -142,6 +171,7 @@ _start() {
     local np
     np="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
     if check_process "${np}"; then
+        start_gateway
         return 0
     fi
     rm -f "${PID_FILE}"
@@ -160,6 +190,7 @@ do_start() {
 }
 
 do_stop() {
+    stop_gateway
     if [ -f "${PID_FILE}" ]; then
         local pid
         pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"

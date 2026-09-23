@@ -11,10 +11,14 @@ APP_ID="com.opencode.web"
 # TRIM_DATA_SHARE_PATHS: 用户授权共享目录（冒号分隔，取第一个）
 APP_DIR="${TRIM_APPDEST}"
 BIN="${APP_DIR}/opencode"
+GATEWAY_PY="${APP_DIR}/fngateway.py"
+GATEWAY_SOCK="${APP_DIR}/web.sock"
+GATEWAY_PREFIX="/app/${APP_ID}"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 ENV_FILE="${TRIM_PKGETC}/opencode.env"
 PID_FILE="${TRIM_PKGVAR}/opencode.pid"
 LOG_FILE="${TRIM_PKGVAR}/opencode.log"
+GATEWAY_LOG="${TRIM_PKGVAR}/fngateway.log"
 SHARES_FILE="${TRIM_PKGVAR}/shares.list"
 ENV_DUMP_FILE="${TRIM_PKGVAR}/env.dump"
 PORT="${TRIM_SERVICE_PORT:-14096}"
@@ -115,6 +119,40 @@ dump_env() {
     } > "${ENV_DUMP_FILE}" 2>/dev/null
 }
 
+# 子路径网关：把飞牛网关转来的 /app/<appname>/ 请求转到本地 opencode 端口
+python_bin() {
+    if [ -x "/var/apps/python312/target/bin/python3" ]; then
+        echo "/var/apps/python312/target/bin/python3"
+    else
+        command -v python3 2>/dev/null || echo "python3"
+    fi
+}
+
+start_gateway() {
+    if [ ! -f "${GATEWAY_PY}" ]; then
+        log_msg "未找到网关脚本 ${GATEWAY_PY}，跳过网关启动"
+        return 0
+    fi
+    stop_gateway
+    local py
+    py="$(python_bin)"
+    nohup "${py}" -u "${GATEWAY_PY}" \
+        --listen "127.0.0.1:${PORT}" \
+        --socket "${GATEWAY_SOCK}" \
+        --prefix "${GATEWAY_PREFIX}" >> "${GATEWAY_LOG}" 2>&1 &
+    sleep 1
+    if [ -S "${GATEWAY_SOCK}" ]; then
+        log_msg "网关已启动：${GATEWAY_PREFIX} -> 127.0.0.1:${PORT}"
+    else
+        log_msg "警告：网关未生成 socket，请查看 ${GATEWAY_LOG}"
+    fi
+}
+
+stop_gateway() {
+    pkill -f "${GATEWAY_PY}" 2>/dev/null
+    rm -f "${GATEWAY_SOCK}" 2>/dev/null
+}
+
 status() {
     if [ -f "${PID_FILE}" ]; then
         local pid
@@ -166,6 +204,7 @@ start_process() {
 
     if status; then
         log_msg "启动成功 (PID=$(cat "${PID_FILE}"))"
+        start_gateway
         return 0
     fi
     rm -f "${PID_FILE}"
@@ -175,6 +214,7 @@ start_process() {
 
 stop_process() {
     log_msg "停止 opencode ..."
+    stop_gateway
     if [ -f "${PID_FILE}" ]; then
         local pid
         pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
@@ -202,6 +242,7 @@ fix_perms() {
     chown -R "${TRIM_USERNAME}:${TRIM_GROUPNAME}" "${TRIM_PKGETC}" 2>/dev/null
     chmod -R 755 "${DATA_DIR}" 2>/dev/null
     chmod 755 "${BIN}" 2>/dev/null
+    chmod 755 "${GATEWAY_PY}" 2>/dev/null
 }
 
 # ── 生命周期 ────────────────────────────────────────────

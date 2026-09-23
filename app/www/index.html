@@ -441,7 +441,7 @@
                 $('fPid').textContent = d.pid || '-';
                 $('sidePort').textContent = `端口 ${d.port || '-'}`;
                 $('cmdline').textContent = `opencode web --port ${d.port || 14096}`;
-                $('btnOpen').href = `${location.protocol}//${location.hostname}:${d.port || 14096}/`;
+                $('btnOpen').href = `${location.origin}/app/com.opencode.web/`;
             } catch (e) { $('stateText').textContent = '无法连接'; }
         }
 

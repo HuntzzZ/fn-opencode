@@ -18,6 +18,7 @@
 ├── cmd/                      # 生命周期脚本（逻辑集中在 common）
 ├── app/
 │   ├── opencode              # 二进制（构建前置入，未入库）
+│   ├── fngateway.py          # 子路径反向代理网关（供飞牛网关挂载）
 │   ├── ui/
 │   │   ├── config            # 两个桌面入口（本体 + 控制台）
 │   │   ├── index.cgi         # 控制台静态文件服务
@@ -96,6 +97,16 @@ HOME=<数据目录> OPENCODE_SERVER_PASSWORD=*** BROWSER=true \
 - 端口：同步修改 `manifest` 的 `service_port`、`app/ui/config` 的 `port`、`cmd/common` 与 `app/ui/api.cgi` 里的 `PORT`。
 - 应用标识：修改 `manifest` 的 `appname` 与 `config/resource`、`app/ui/config`、`cmd/common`、`app/ui/*.cgi` 中的对应值。
 - 上游维护者：`manifest` 的 `distributor` / `distributor_url`。
+
+## 远程访问 / 反向代理
+
+桌面「opencode」入口使用飞牛的网关模式（`gatewaySocket` + `gatewayPrefix`），走**同源路径** `/app/com.opencode.web/`：
+
+- 因此无论是局域网 IP、还是经 Lucky / Nginx 等反代到公网域名（https），都能直接打开，**不需要额外转发 14096 端口**，也不会触发浏览器的混合内容拦截；
+- 应用内的 `fngateway.py` 监听 `target/web.sock`，把飞牛网关转来的请求转发到本地 `127.0.0.1:14096`，并把 SPA 的绝对路径/`fetch`/`XHR`/`WebSocket` 改写到该前缀下；
+- 局域网仍可直接访问 `http://<NAS_IP>:14096`（HTTP Basic 认证）。
+
+> 若你之前用 `port` 方式访问，域名下会失败（端口没转发 + https 页面加载 http iframe）；改用网关模式后即正常。
 
 ## 可选：多架构与运行时依赖
 
