@@ -15,6 +15,7 @@ opencode 的 Web UI 只能整站运行在根路径（`/`），而飞牛在网关
 """
 
 import argparse
+import base64
 import atexit
 import gzip
 import http.client
@@ -291,21 +292,18 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
     def _forward_headers(self, target_host, target_port):
         headers = {}
-        auth = None
         for k, v in self.headers.items():
             lk = k.lower()
             if lk in ("host", "origin", "connection", "sec-fetch-site", "transfer-encoding"):
                 continue
-            if lk == "x-fnproxy-authorization":
-                auth = v
-                continue
-            if lk == "authorization":
-                # 浏览器原始凭据优先，飞牛注入的稍后会被覆盖
-                auth = auth or v
+            # 客户端（浏览器）带来的 Authorization 一律丢弃：飞牛网关用同一个头做鉴权，
+            # 让 opencode 的 Basic 凭据占用它会顶掉飞牛的 token。这里改由网关自行注入。
+            if lk in ("authorization", "x-fnproxy-authorization"):
                 continue
             headers[k] = v
-        if auth:
-            headers["Authorization"] = auth
+        basic = getattr(self.server, "basic_auth", "")
+        if basic:
+            headers["Authorization"] = basic
         headers["Host"] = "%s:%s" % (target_host, target_port)
         headers["Connection"] = "close"
         return headers
@@ -338,7 +336,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
         for k, v in resp.getheaders():
             lk = k.lower()
             if lk in ("content-length", "transfer-encoding", "connection", "content-encoding",
-                      "content-security-policy", "content-security-policy-report-only"):
+                      "content-security-policy", "content-security-policy-report-only",
+                      "www-authenticate"):
                 continue
             if lk == "location" and v.startswith("/") and not v.startswith("//") \
                     and not v.startswith(prefix + "/"):
@@ -407,21 +406,19 @@ class GatewayHandler(BaseHTTPRequestHandler):
             self.send_error(502, "Bad Gateway")
             return
         handshake = ["%s %s HTTP/1.1" % (self.command, req_path)]
-        auth = None
         for k, v in self.headers.items():
             lk = k.lower()
             if lk == "host":
                 handshake.append("Host: %s:%s" % (host, port))
             elif lk == "origin":
                 handshake.append("Origin: http://%s:%s" % (host, port))
-            elif lk == "x-fnproxy-authorization":
-                auth = v
-            elif lk == "authorization":
-                auth = auth or v
+            elif lk in ("authorization", "x-fnproxy-authorization"):
+                continue
             else:
                 handshake.append("%s: %s" % (k, v))
-        if auth:
-            handshake.append("Authorization: %s" % auth)
+        basic = getattr(self.server, "basic_auth", "")
+        if basic:
+            handshake.append("Authorization: %s" % basic)
         handshake.append("\r\n")
         target.sendall("\r\n".join(handshake).encode("utf-8"))
 
@@ -456,6 +453,13 @@ if hasattr(socketserver, "UnixStreamServer"):
             self.target_port = target_port
             self.prefix = prefix.rstrip("/")
             self.bridge = BRIDGE_JS.replace("__PREFIX__", self.prefix)
+            # 由网关代浏览器向 opencode 提供 Basic 凭据（避免与飞牛的 Authorization 冲突）
+            user = os.environ.get("OPENCODE_SERVER_USERNAME", "opencode")
+            pwd = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+            self.basic_auth = ""
+            if pwd:
+                token = base64.b64encode(("%s:%s" % (user, pwd)).encode("utf-8")).decode("ascii")
+                self.basic_auth = "Basic " + token
             if os.path.exists(socket_path):
                 try:
                     os.unlink(socket_path)
